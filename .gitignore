@@ -18,3 +18,19 @@ resources/.arch-internal-preview.css
 /mock-server/node_modules
 
 customer_tests/
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Test results
+test-results/
+*.log
+
+# Data and backups
+data/*.db
+data/*.sqlite
+backups/*.tar.gz
