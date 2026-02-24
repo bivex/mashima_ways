@@ -8,7 +8,8 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "test": "node --test",
-    "lint": "eslint src/**/*.js"
+    "lint": "eslint src/**/*.js",
+    "profile": "node test/profile_bottlenecks.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.5.0",
