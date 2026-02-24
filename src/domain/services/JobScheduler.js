@@ -199,9 +199,18 @@ export class JobScheduler {
 
                 this.inFlight.add(job.id);
                 this.activeJobCount++;
-                await this._processJob(job);
-                this.activeJobCount--;
-                this.inFlight.delete(job.id);
+
+                // 🔥 PARALLEL PROCESSING: Don't await _processJob - start it asynchronously
+                // This allows multiple jobs to run concurrently
+                this._processJob(job)
+                    .finally(() => {
+                        this.activeJobCount--;
+                        this.inFlight.delete(job.id);
+                    })
+                    .catch(error => {
+                        console.error(`Job ${job.id} processing error:`, error.message);
+                    });
+
             } catch (error) {
                 console.error('Error in job processor:', error);
                 this.activeJobCount = Math.max(0, this.activeJobCount - 1); // Ensure doesn't go negative
@@ -228,6 +237,8 @@ export class JobScheduler {
                 // Context already exists, no need to create
             } catch (error) {
                 console.error(`Failed to acquire context: ${error.message}`);
+                // Add delay before re-queuing to prevent tight loop
+                await new Promise(resolve => setTimeout(resolve, 100));
                 await this.jobQueue.enqueue(job);
                 return;
             }
@@ -235,7 +246,9 @@ export class JobScheduler {
             // Browser Pool: Find browser and create context
             browser = this.browserManager.findAvailableBrowser();
             if (!browser) {
-                // No available browser, re-queue the job
+                // No available browser, re-queue the job with delay to prevent tight loop
+                // With parallel processing, this prevents spamming the queue
+                await new Promise(resolve => setTimeout(resolve, 100));
                 await this.jobQueue.enqueue(job);
                 return;
             }
@@ -306,6 +319,9 @@ export class JobScheduler {
                     if (errorPolicy.retryable && job.canRetry(errorPolicy.maxRetries)) {
                         console.log(`🔄 Job ${job.id} lifecycle: failed → retry (${errorPolicy.category}: ${error.message})`);
                         job.markAsFailed(error);
+                        // Add delay before retry to prevent tight loop with parallel processing
+                        const backoffMs = errorPolicy.backoffMs || 1000;
+                        await new Promise(resolve => setTimeout(resolve, backoffMs));
                         await this.jobQueue.enqueue(job);
                     } else {
                         // Permanent failure - track the logging itself
