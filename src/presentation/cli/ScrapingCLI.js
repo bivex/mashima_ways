@@ -104,13 +104,71 @@ export class ScrapingCLI {
     }
 
     async handleSubmitCommand(url, options) {
+        let jobResult = null;
+        let jobError = null;
+
+        // Subscribe to job completion events
+        const onCompleted = (event) => {
+            if (event.aggregateId === jobResult?.jobId) {
+                jobResult = {...jobResult, status: 'completed', result: event.data.result};
+            }
+        };
+        const onFailed = (event) => {
+            if (event.aggregateId === jobResult?.jobId) {
+                jobError = event.data.error;
+                jobResult = {...jobResult, status: 'failed'};
+            }
+        };
+
+        this.service.eventBus.subscribe('JobCompleted', onCompleted);
+        this.service.eventBus.subscribe('JobFailed', onFailed);
+
         try {
             console.log(`📤 Submitting job for: ${url}`);
-            const result = await this.service.submitJob(url, this.parseOptions(options));
-            console.log('✅ Job submitted:', result);
+            const submitResult = await this.service.submitJob(url, this.parseOptions(options));
+            jobResult = submitResult;
+            console.log(`✅ Job submitted: ${submitResult.jobId}`);
+
+            // Wait for job to complete
+            console.log('⏳ Waiting for job to complete...');
+            const timeout = 60000; // 60 seconds
+            const startTime = Date.now();
+
+            while (Date.now() - startTime < timeout) {
+                if (jobResult?.status === 'completed' || jobResult?.status === 'failed') {
+                    break;
+                }
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+
+            if (jobResult?.status === 'completed') {
+                console.log('✅ Job completed successfully!');
+                const result = jobResult.result;
+                console.log(`   Duration: ${result.duration}ms`);
+                if (result.data) {
+                    if (result.data.title) {
+                        console.log(`   Title: ${result.data.title}`);
+                    }
+                    console.log(`   HTML length: ${(result.data.html || '').length} bytes`);
+                    // Preview first 200 chars of HTML
+                    if (result.data.html && result.data.html.length > 0) {
+                        const preview = result.data.html.replace(/<[^>]*>/g, '').substring(0, 200).replace(/\s+/g, ' ').trim();
+                        console.log(`   Preview: ${preview}${preview.length >= 200 ? '...' : ''}`);
+                    }
+                }
+            } else if (jobResult?.status === 'failed') {
+                console.error(`❌ Job failed: ${jobError}`);
+            } else {
+                console.log('⚠️ Timeout waiting for job completion');
+            }
         } catch (error) {
             console.error('❌ Failed to submit job:', error.message);
+        } finally {
+            // Unsubscribe from events
+            this.service.eventBus.unsubscribe('JobCompleted', onCompleted);
+            this.service.eventBus.unsubscribe('JobFailed', onFailed);
         }
+
         await this.stop();
     }
 
