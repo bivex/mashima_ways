@@ -6,6 +6,8 @@
 import { PlaywrightBrowserAdapter } from '../src/infrastructure/adapters/PlaywrightBrowserAdapter.js';
 import { SingleBrowserManager } from '../src/domain/services/SingleBrowserManager.js';
 import { BrowserConfig } from '../src/domain/value-objects/BrowserConfig.js';
+import { writeFileSync, mkdirSync } from 'fs';
+import { join } from 'path';
 
 const adapter = new PlaywrightBrowserAdapter();
 
@@ -90,9 +92,37 @@ if (pageResults.length > 0 && pageResults[0].storiesList.length > 0) {
 
 await browserManager.shutdown();
 
+// Save all stories to scraped.json
+const allStories = [];
+pageResults.forEach(result => {
+    if (result.success && result.storiesList && Array.isArray(result.storiesList)) {
+        result.storiesList.forEach(story => {
+            allStories.push({
+                page: result.pageNum,
+                title: story.title,
+                link: story.link,
+                points: story.points,
+                comments: story.comments
+            });
+        });
+    }
+});
+
+// Ensure scraped directory exists
+const scrapedDir = 'scraped';
+try {
+    mkdirSync(scrapedDir, { recursive: true });
+} catch {
+    // Directory already exists
+}
+
+const outputFile = join(scrapedDir, 'hn_stories.json');
+writeFileSync(outputFile, JSON.stringify(allStories, null, 2), 'utf8');
+
 console.log('');
 console.log('✅ Multi-page scraping complete!');
 console.log(`   Successfully scraped ${pageResults.length} pages from HackerNews`);
+console.log(`   Saved ${allStories.length} stories to ${outputFile}`);
 
 /**
  * Scrape a single HackerNews page
@@ -167,7 +197,7 @@ async function scrapePage(pageNum, url) {
             success: true,
             stories: data.stories,
             links: data.links,
-            storiesList: data.stories
+            storiesList: data.storiesList  // Fixed: was data.stories (number)
         };
 
     } catch (error) {
