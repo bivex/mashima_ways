@@ -85,8 +85,9 @@ console.log('');
 if (pageResults.length > 0 && pageResults[0].storiesList.length > 0) {
     console.log('Sample Stories from Page 1:');
     pageResults[0].storiesList.slice(0, 5).forEach((story, i) => {
-        console.log(`  ${i + 1}. ${story.title.substring(0, 70)}`);
-        console.log(`     Points: ${story.points} | Comments: ${story.comments}`);
+        const dateStr = story.date ? ` | ${story.date}` : '';
+        console.log(`  ${i + 1}. ${story.title.substring(0, 60)}`);
+        console.log(`     Points: ${story.points} | Comments: ${story.comments}${dateStr}`);
     });
 }
 
@@ -102,7 +103,10 @@ pageResults.forEach(result => {
                 title: story.title,
                 link: story.link,
                 points: story.points,
-                comments: story.comments
+                comments: story.comments,
+                date: story.date || null,
+                timestamp: story.timestamp || null,
+                storyId: story.storyId || null
             });
         });
     }
@@ -157,9 +161,13 @@ async function scrapePage(pageNum, url) {
                 if (titleEl) {
                     const title = titleEl.textContent;
                     const link = titleEl.href;
+                    // Story ID is in the row's id attribute (e.g., "36082831")
+                    const storyId = row.id;
 
                     let points = 0;
                     let comments = 0;
+                    let date = null;
+                    let timestamp = null;
 
                     // HN has the score in the next sibling row (the .athing subrow)
                     const nextRow = row.nextElementSibling;
@@ -167,6 +175,20 @@ async function scrapePage(pageNum, url) {
                         const pointsEl = nextRow.querySelector('.score');
                         if (pointsEl) {
                             points = parseInt(pointsEl.textContent.trim()) || 0;
+                        }
+
+                        // Extract date/time from the age element
+                        const ageEl = nextRow.querySelector('.age');
+                        if (ageEl) {
+                            const titleAttr = ageEl.getAttribute('title');
+                            if (titleAttr) {
+                                // Title contains full datetime
+                                timestamp = titleAttr;
+                            } else {
+                                // Try parsing from text content (e.g., "2 hours ago")
+                                const ageText = ageEl.textContent.trim();
+                                date = ageText;
+                            }
                         }
 
                         // Comments link is in the subtext, look for the link
@@ -180,7 +202,7 @@ async function scrapePage(pageNum, url) {
                         });
                     }
 
-                    // Fallback: try parsing from subtext
+                    // Fallback: try parsing comments from subtext
                     if (comments === 0 && subtextEl) {
                         const commentMatch = subtextEl.textContent.match(/(\d+)\s*comment/);
                         if (commentMatch) {
@@ -188,7 +210,7 @@ async function scrapePage(pageNum, url) {
                         }
                     }
 
-                    stories.push({ title, link, points, comments });
+                    stories.push({ title, link, points, comments, date, timestamp, storyId });
                 }
             });
 
