@@ -8,8 +8,16 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "test": "node --test",
+    "test:caching": "node test/test_caching.js",
     "lint": "eslint src/**/*.js",
-    "profile": "node test/profile_bottlenecks.js"
+    "profile": "node test/profile_bottlenecks.js",
+    "profile:cpu": "node --cpu-prof test/profile_bottlenecks.js && node tools/analyze_profile.js",
+    "profile:deep": "node --cpu-prof test/profile_bottlenecks.js && node tools/deep_profile_analysis.js",
+    "scrape:single": "node examples/single_browser_scraper.js",
+    "scrape:safe": "node --expose-gc --max-old-space-size=512 examples/single_browser_scraper.js",
+    "profile:macos": "./tools/profile_macos.sh",
+    "profile:instruments": "./tools/profile_macos.sh --instruments",
+    "profile:all": "./tools/profile_macos.sh --all"
   },
   "dependencies": {
     "better-sqlite3": "^12.5.0",

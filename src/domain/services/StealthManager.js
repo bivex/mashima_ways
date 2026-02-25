@@ -26,7 +26,11 @@ export class StealthManager {
             level: 'full',  // 'minimal', 'standard', 'full'
             ...options
         };
-        
+
+        // ⚡ OPTIMIZATION: Cache applied stealth to avoid redundant operations
+        this._appliedContexts = new Set();  // Track contexts with applied stealth
+        this._appliedPages = new Set();     // Track pages with applied stealth
+
         // All 20 evasion techniques
         this.techniques = [
             'webdriver',           // 1. Navigator.webdriver masking
@@ -110,10 +114,17 @@ export class StealthManager {
     /**
      * Apply all stealth techniques to browser context
      * @param {BrowserContext} context - Playwright browser context
+     * @returns {boolean} - true if applied, false if already cached
      */
     async applyToContext(context) {
+        // ⚡ OPTIMIZATION: Check if already applied to this context
+        const contextId = this._getContextId(context);
+        if (this._appliedContexts.has(contextId)) {
+            return false; // Already applied, skip
+        }
+
         console.log(`🎭 Applying ${this.techniques.length} stealth techniques...`);
-        
+
         // 1. Webdriver masking (Proxy method - most reliable)
         await this._applyWebdriverMasking(context);
         
@@ -131,8 +142,23 @@ export class StealthManager {
         
         // 19-20. Advanced detection bypass
         await this._applyAdvancedMasking(context);
-        
+
+        // ⚡ OPTIMIZATION: Mark as applied
+        this._appliedContexts.add(contextId);
+
         console.log(`✅ All ${this.techniques.length} stealth techniques applied`);
+        return true; // Successfully applied
+    }
+
+    /**
+     * Get a unique identifier for a context
+     * @private
+     */
+    _getContextId(context) {
+        // Try multiple possible ID sources
+        return context._guid || context.id?.() || context._id ||
+               (context._browser?._id ? `${context._browser._id}-ctx` : null) ||
+               String(context);
     }
 
     /**
@@ -692,8 +718,15 @@ export class StealthManager {
      * Apply stealth to page (for properties that need page.evaluate)
      * Call this after page creation, before navigation
      * @param {Page} page - Playwright page
+     * @returns {boolean} - true if applied, false if already cached
      */
     async applyToPage(page) {
+        // ⚡ OPTIMIZATION: Check if already applied to this page
+        const pageId = this._getPageId(page);
+        if (this._appliedPages.has(pageId)) {
+            return false; // Already applied, skip
+        }
+
         // Generate unique noise seed for this page
         const noiseSeed = Math.floor(Math.random() * 1000000);
         
@@ -780,6 +813,59 @@ export class StealthManager {
                 return addCanvasNoise(imageData, seed + 2);
             };
         }, noiseSeed);
+
+        // ⚡ OPTIMIZATION: Mark as applied
+        this._appliedPages.add(pageId);
+        return true; // Successfully applied
+    }
+
+    /**
+     * Get a unique identifier for a page
+     * @private
+     */
+    _getPageId(page) {
+        return page._guid || page.id?.() || page._id || String(page);
+    }
+
+    /**
+     * ⚡ OPTIMIZATION: Cleanup cache when context/page is closed
+     * Call this when a context or page is closed to free memory
+     * @param {string|BrowserContext|Page} target - Context ID, page ID, or object to cleanup
+     */
+    cleanup(target) {
+        let idToRemove;
+
+        if (typeof target === 'string') {
+            idToRemove = target;
+        } else if (target?._guid) {
+            idToRemove = target._guid;
+        } else if (target?.id) {
+            idToRemove = target.id();
+        }
+
+        if (idToRemove) {
+            this._appliedContexts.delete(idToRemove);
+            this._appliedPages.delete(idToRemove);
+        }
+    }
+
+    /**
+     * ⚡ OPTIMIZATION: Clear all caches (useful for browser restart)
+     */
+    clearCache() {
+        this._appliedContexts.clear();
+        this._appliedPages.clear();
+    }
+
+    /**
+     * Get cache statistics (for monitoring)
+     * @returns {{contexts: number, pages: number}}
+     */
+    getCacheStats() {
+        return {
+            contexts: this._appliedContexts.size,
+            pages: this._appliedPages.size
+        };
     }
 
     /**

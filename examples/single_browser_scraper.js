@@ -120,9 +120,10 @@ async function processUrl(url, browserManager, monitor) {
         });
 
         // § 7.2: waitUntil: 'domcontentloaded' (НЕ 'networkidle' - это медленно!)
+        // ⚡ AGGRESSIVE: 10 sec timeout instead of 30
         await page.goto(url, {
             waitUntil: 'domcontentloaded',
-            timeout: 30000
+            timeout: 10000  // ⚡ Faster timeout - don't wait for slow sites
         });
 
         // Парсинг данных
@@ -158,7 +159,7 @@ async function processUrl(url, browserManager, monitor) {
 async function scrapeWithMaxSpeed(urls) {
     console.log('🚀 Starting Single Browser Architecture Scraper');
     console.log(`📊 System: ${os.cpus().length} CPU cores`);
-    console.log(`🎯 Max contexts: ${os.cpus().length * 4}`);
+    console.log(`🎯 Max contexts: ${os.cpus().length * 8}`); // ⚡ Increased to 8 per core
     console.log(`📝 URLs to process: ${urls.length}\n`);
 
     const monitor = new PerformanceMonitor();
@@ -166,11 +167,11 @@ async function scrapeWithMaxSpeed(urls) {
     // § 3: ИНИЦИАЛИЗАЦИЯ
     const adapter = new PlaywrightBrowserAdapter();
     const browserManager = new SingleBrowserManager(adapter, {
-        contextsPerCore: 4 // § 3: N = C × 4
+        contextsPerCore: 8 // ⚡ AGGRESSIVE: 8 contexts per core instead of 4
     });
 
     // § 5.3: Оптимизированная конфигурация браузера
-    const config = BrowserConfig.forSingleBrowserArchitecture();
+    const config = BrowserConfig.forMaximumSpeed(); // ⚡ MAX SPEED config
 
     try {
         // Запуск единственного браузера

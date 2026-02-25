@@ -195,4 +195,64 @@ export class BrowserConfig {
             userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         });
     }
+
+    /**
+     * ⚡ MAXIMUM SPEED CONFIG - Агрессивная минимизация idle времени
+     *
+     * Для максимальной скорости throughput:
+     * - Меньше timeout
+     * - Больше параллельных соединений
+     * - Отключены лишние фичи
+     * - Connection pooling
+     */
+    static forMaximumSpeed() {
+        return new BrowserConfig({
+            headless: true,
+            args: [
+                // Базовые флаги
+                '--disable-gpu',
+                '--disable-dev-shm-usage',
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+
+                // ⚡ Скорость над всем
+                '--disable-extensions',
+                '--disable-plugins',
+                '--disable-default-apps',
+                '--disable-sync',
+                '--disable-breakpad',
+                '--disable-background-networking',
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-renderer-backgrounding',
+                '--memory-pressure-off',
+                '--disable-software-rasterizer',
+                '--disable-ipc-flooding-protection',
+                '--no-first-run',
+                '--disable-hang-monitor',
+
+                // ⚡ Network оптимизация (reduce idle)
+                '--max-connections-per-host=100',
+                '--max-socket-pool=200',
+                '--net-log-level=0',
+                '--network-service-start-timeout=1',
+
+                // ⚡ Отключить задержки
+                '--disable-features=VizDisplayCompositor',
+                '--disable-features=TranslateUI,BlinkGenPropertyTrees',
+
+                // ⚡ Aggressive caching
+                '--aggressive-cache-discard',
+                '--disk-cache-size=10485760', // 10MB cache
+
+                // Минимальный viewport
+                '--window-size=800,600'
+            ],
+            timeout: 10000, // ⚡ 10 сек вместо 30
+            viewport: {width: 800, height: 600},
+            javaScriptEnabled: true,
+            blockResources: ['image', 'media', 'font', 'stylesheet', 'websocket'],
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        });
+    }
 }

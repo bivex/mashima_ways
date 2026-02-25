@@ -300,23 +300,37 @@ export class PlaywrightBrowserAdapter {
     }
 
     /**
-     * Setup resource blocking on context level (applies to all pages)
-     * Saves up to 70% traffic and rendering time by blocking images, CSS, fonts, and analytics
+     * Setup AGGRESSIVE resource blocking on context level (applies to all pages)
+     * Saves up to 80% traffic and rendering time by blocking images, CSS, fonts, analytics, and more
      * Best practice from high-performance Playwright manual
      */
     async _setupResourceBlocking(context) {
         // Block images - typically 69% of requests
-        await context.route('**/*.{png,jpg,jpeg,gif,svg,webp,ico,avif}', route => route.abort());
+        await context.route('**/*.{png,jpg,jpeg,gif,svg,webp,ico,avif,bmp}', route => route.abort());
 
         // Block stylesheets and fonts - typically 18% of requests
         await context.route('**/*.{css,woff,woff2,ttf,eot,otf}', route => route.abort());
 
         // Block media files
-        await context.route('**/*.{mp4,webm,ogg,mp3,wav,flac,aac}', route => route.abort());
+        await context.route('**/*.{mp4,webm,ogg,mp3,wav,flac,aac,m4a}', route => route.abort());
 
-        // Block analytics and tracking scripts
+        // ⚡ AGGRESSIVE: Additional blocking for idle reduction
         await context.route('**/*', route => {
             const url = route.request().url();
+            const type = route.request().resourceType();
+
+            // Block websocket (often causes idle waiting)
+            if (type === 'websocket') {
+                return route.abort();
+            }
+
+            // Block additional resource types
+            if (['manifest', 'other'].includes(type)) {
+                // Check if it's not critical JSON/data
+                if (!url.includes('.json') && !url.includes('api')) {
+                    return route.abort();
+                }
+            }
 
             // Block common analytics and tracking domains
             const blockPatterns = [
@@ -329,12 +343,62 @@ export class PlaywrightBrowserAdapter {
                 'metrics.',
                 'cdn.segment.com',
                 'hotjar.com',
-                'mixpanel.com'
+                'mixpanel.com',
+                'amplitude.com',
+                'gtm.',
+                'recaptcha',
+                'hcaptcha.com',
+                'challenges.cloudflare.com',
+                'bat.bing.com',
+                'pixel.wp.com',
+                'stats.wp.com',
+                'pixel.facebook.com',
+                'sb.scorecardresearch.com',
+                'secure.quantserve.com',
+                'pixel.quantserve.com',
+                'ad.doubleclick.net',
+                'tpc.googlesyndication.com',
+                'pagead2.googlesyndication.com',
+                'static.cloudflareinsights.com',
+                'clarity.ms',
+                'analytics.twitter.com',
+                'connect.facebook.net',
+                'platform.twitter.com',
+                'cdn.syndication.twimg.com'
             ];
 
             for (const pattern of blockPatterns) {
                 if (url.includes(pattern)) {
                     return route.abort();
+                }
+            }
+
+            // Block specific file extensions that cause delays
+            const blockExtensions = [
+                '.pdf', '.zip', '.exe', '.dmg', '.pkg', '.deb', '.rpm',
+                '.iso', '.img', '.bin', '.tar', '.gz', '.rar', '.7z'
+            ];
+
+            for (const ext of blockExtensions) {
+                if (url.toLowerCase().endsWith(ext)) {
+                    return route.abort();
+                }
+            }
+
+            // Block common unnecessary paths
+            const blockPaths = [
+                '/wp-content/', '/wp-includes/', '/uploads/',
+                '/static/', '/assets/css/', '/assets/js/',
+                '/node_modules/', '/dist/', '/build/',
+                '/_next/static/', '/.well-known/'
+            ];
+
+            for (const path of blockPaths) {
+                if (url.includes(path)) {
+                    // Allow critical JSON/API calls even in these paths
+                    if (!url.includes('.json') && !url.includes('api')) {
+                        return route.abort();
+                    }
                 }
             }
 

@@ -41,6 +41,12 @@ export class ResourceMonitor {
         // Cache for expensive operations
         this.fdLimit = null;
         this.lastCpuInfo = null;
+
+        // ⚡ OPTIMIZATION: Adaptive monitoring based on load
+        this.activeJobs = 0; // Track active jobs for adaptive interval
+        this.baseInterval = this.checkInterval;
+        this.idleInterval = options.idleInterval || 60000; // 60s when idle
+        this.busyInterval = options.busyInterval || 15000; // 15s when busy
     }
 
     /**
@@ -282,12 +288,82 @@ export class ResourceMonitor {
 
         this.monitorInterval = setInterval(async () => {
             const metrics = await this.getMetrics();
+
+            // ⚡ OPTIMIZATION: Adaptively adjust interval based on load
+            this._adjustMonitoringInterval();
+
             if (callback) {
                 callback(metrics, this.getLoadRecommendations());
             }
         }, this.checkInterval);
 
-        console.log(`🖥️ Resource monitoring started (interval: ${this.checkInterval}ms)`);
+        console.log(`🖥️ Resource monitoring started (interval: ${this.checkInterval}ms, adaptive: enabled)`);
+    }
+
+    /**
+     * ⚡ OPTIMIZATION: Adjust monitoring interval based on system load and active jobs
+     * @private
+     */
+    _adjustMonitoringInterval() {
+        const newInterval = this._calculateOptimalInterval();
+
+        if (newInterval !== this.checkInterval) {
+            this.checkInterval = newInterval;
+
+            // Restart interval with new timing
+            if (this.monitorInterval) {
+                clearInterval(this.monitorInterval);
+                this.monitorInterval = setInterval(async () => {
+                    const metrics = await this.getMetrics();
+                    this._adjustMonitoringInterval();
+                }, this.checkInterval);
+            }
+        }
+    }
+
+    /**
+     * ⚡ OPTIMIZATION: Calculate optimal monitoring interval based on conditions
+     * @private
+     * @returns {number} Optimal interval in milliseconds
+     */
+    _calculateOptimalInterval() {
+        // If system is overloaded, check more frequently
+        if (this.isOverloaded) {
+            return Math.min(this.busyInterval, 10000); // Max every 10s
+        }
+
+        // If active jobs, check more frequently
+        if (this.activeJobs > 0) {
+            // Scale interval based on job count (more jobs = more frequent)
+            const jobFactor = Math.min(this.activeJobs / 10, 1); // 0 to 1
+            return this.idleInterval - (jobFactor * (this.idleInterval - this.busyInterval));
+        }
+
+        // Idle - use longer interval
+        return this.idleInterval;
+    }
+
+    /**
+     * ⚡ OPTIMIZATION: Set the number of active jobs
+     * Call this when jobs start/complete for adaptive monitoring
+     * @param {number} count - Number of active jobs
+     */
+    setActiveJobs(count) {
+        this.activeJobs = Math.max(0, count);
+    }
+
+    /**
+     * ⚡ OPTIMIZATION: Increment active job count
+     */
+    incrementActiveJobs() {
+        this.activeJobs++;
+    }
+
+    /**
+     * ⚡ OPTIMIZATION: Decrement active job count
+     */
+    decrementActiveJobs() {
+        this.activeJobs = Math.max(0, this.activeJobs - 1);
     }
 
     /**
