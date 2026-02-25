@@ -153,7 +153,6 @@ async function scrapePage(pageNum, url) {
             rows.forEach(row => {
                 const titleEl = row.querySelector('.titleline > a');
                 const subtextEl = row.querySelector('.subtext');
-                const pointsEl = row.querySelector('.score');
 
                 if (titleEl) {
                     const title = titleEl.textContent;
@@ -162,12 +161,28 @@ async function scrapePage(pageNum, url) {
                     let points = 0;
                     let comments = 0;
 
-                    if (pointsEl) {
-                        points = parseInt(pointsEl.textContent) || 0;
+                    // HN has the score in the next sibling row (the .athing subrow)
+                    const nextRow = row.nextElementSibling;
+                    if (nextRow) {
+                        const pointsEl = nextRow.querySelector('.score');
+                        if (pointsEl) {
+                            points = parseInt(pointsEl.textContent.trim()) || 0;
+                        }
+
+                        // Comments link is in the subtext, look for the link
+                        const commentLinks = nextRow.querySelectorAll('a');
+                        commentLinks.forEach(a => {
+                            const text = a.textContent.trim();
+                            const match = text.match(/(\d+)/);
+                            if (match && (text.includes('comment') || a.href.includes('item'))) {
+                                comments = parseInt(match[1]) || 0;
+                            }
+                        });
                     }
 
-                    if (subtextEl) {
-                        const commentMatch = subtextEl.textContent.match(/(\d+)\s+comments/);
+                    // Fallback: try parsing from subtext
+                    if (comments === 0 && subtextEl) {
+                        const commentMatch = subtextEl.textContent.match(/(\d+)\s*comment/);
                         if (commentMatch) {
                             comments = parseInt(commentMatch[1]) || 0;
                         }
